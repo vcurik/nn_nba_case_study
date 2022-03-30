@@ -55,3 +55,61 @@ data_missing_imputed_tbl %>% glimpse()
 data_missing_imputed_tbl %>% plot_missing()
 
 data_missing_imputed_tbl %>% DataExplorer::create_report()
+
+term <- "moum"
+
+data_tbl %>%
+    names() %>%
+    as_tibble() %>% 
+    filter(str_to_lower(value) %>% str_detect(term))
+
+data_tbl %>% 
+    select(contains(term)) %>% 
+    #select(ChargeAmount:PostpaidBalance) %>% 
+    #drop_na() %>% 
+    slice(1:20)
+
+# * Columns: Missing Values ----
+
+names <- apply(X = is.na(data_tbl), MARGIN = 2, FUN = mean) %>% names() %>% as_tibble() 
+
+column_na_prop_tbl <- names %>% 
+    bind_cols(
+        apply(X = is.na(data_tbl), MARGIN = 2, FUN = mean) %>% as_tibble()        
+    ) %>% rename(column = "value...1", na_prop = "value...2")
+
+column_na_prop_tbl %>% arrange(na_prop) %>% view()
+
+# Columns NA proportion (203) 
+column_na_prop_tbl 
+
+# Complete columns (27)
+column_na_prop_tbl %>% 
+    filter(na_prop == 0)
+
+# Columns with < 10 % missing observations (78)
+column_na_prop_tbl %>% 
+    filter(na_prop < 0.1)
+
+# Columns with all observations missing (2)
+column_na_prop_tbl %>% 
+    filter(na_prop == 1)
+
+# * Columns: Type ----
+
+# ** Character (9) ----
+char_column_tbl <- data_tbl %>% 
+    select(where(is.character))
+
+char_column_tbl
+
+# ** Logical (5) ----
+logical_column_tbl <- data_tbl %>% 
+    select(where(is.logical))
+
+logical_column_tbl
+# columns TotalNETopUpCardAmount and GlobalVouchers can be removed as they do not contain any values
+
+# ** Numeric (183) ---- 
+data_tbl %>% 
+    select(where(is.numeric))
