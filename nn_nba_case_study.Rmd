@@ -15,6 +15,9 @@ options(scipen = 999)
 library(tidyverse)
 library(skimr)
 library(DataExplorer)
+
+library(h2o)
+
 ```
 
 ```{r}
@@ -42,10 +45,10 @@ data_tbl %>%
     count(n) 
 ```
 
-Base on the SnapshotDate column, there are 3 different snaphot dates. 
+Based on the SnapshotDate column, there are 3 different snaphot dates. 
 
 ```{r}
-deduplicated_data_tbl %>% 
+data_tbl %>% 
     count(SnapshotDate)
 ```
 
@@ -55,7 +58,7 @@ We will check for duplicate rows, but first we need to remove the unnamed column
 
 ```{r}
 deduplicated_data_tbl <- data_tbl %>% 
-    select(-...1) %>% 
+    select(-X1) %>% 
     distinct()
 ```
 
@@ -101,10 +104,6 @@ deduplicated_data_tbl %>%
     mutate(campaign_total = select(., campaign_1:campaign_16) %>% rowSums(na.rm = TRUE)) %>% 
     select(SubscriberID, SnapshotDate, campaign_total, campaign_1:campaign_16) %>% 
     count(campaign_total)
-
-
-    
-    
 ```
 
 ```{r}
@@ -120,5 +119,160 @@ data_tbl %>%
 deduplicated_data_tbl %>% 
     filter(SubscriberID == 166496509439) %>% 
     view()
+```
+
+```{r}
+names <- apply(X = is.na(deduplicated_data_tbl), MARGIN = 2, FUN = mean) %>% names() %>% as_tibble() 
+
+column_na_prop_tbl <- names %>% 
+    bind_cols(
+        apply(X = is.na(deduplicated_data_tbl), MARGIN = 2, FUN = mean) %>% as_tibble()        
+    ) %>% rename(column = "value...1", na_prop = "value...2")
+
+columns_to_remove <- column_na_prop_tbl %>% 
+    filter(na_prop > 0.5) %>% 
+    pull(1)
+```
+
+```{r}
+selected_data_with_na_tbl <- deduplicated_data_tbl %>% 
+    select(-all_of(columns_to_remove))
+```
+
+```{r}
+selected_data_with_na_tbl %>% skim()
+```
+
+
+```{r}
+selected_data_with_na_tbl %>% 
+    slice(1:10) %>% 
+    view()
+```
+
+```{r}
+selected_data_with_na_tbl %>% names()
+```
+
+
+```{r}
+count_na_func <- function(x) sum(is.na(x)) 
+
+selected_data_na_count_tbl <- selected_data_with_na_tbl %>% 
+    mutate(count_na = apply(., 1, count_na_func))
+
+selected_data_na_count_tbl %>% 
+    count(count_na) %>% 
+    arrange(-count_na) %>% 
+    view()
+
+selected_data_na_count_tbl %>% 
+    arrange(-count_na) %>% 
+    slice(1:25) %>% 
+    view()
+
+```
+
+```{r}
+selected_data_na_count_tbl %>%
+    mutate(campaign_total = select(., campaign_1:campaign_16) %>% rowSums(na.rm = TRUE)) %>% 
+    filter(campaign_total > 0) %>% 
+    select(SubscriberID, SnapshotDate, count_na, everything()) %>% 
+    # count(count_na) %>% 
+    # arrange(-count_na) %>% 
+    #filter(count_na > 0) %>% 
+    skim()
+
+```
+
+```{r}
+selected_data_na_count_tbl %>%
+    mutate(campaign_total = select(., campaign_1:campaign_16) %>% rowSums(na.rm = TRUE)) %>% 
+    filter(campaign_total > 0) %>% 
+    count(SalesChannel)
+    filter(SalesChannel == "LMRA") %>% 
+    select(starts_with("campaign"))
+```
+
+```{r}
+columns_to_keep_data_tbl <- selected_data_na_count_tbl %>% 
+    select(-c(starts_with("Customer"), SalesChannel, PackagePlanSubscriptionDate, SnapshotDate)) %>% 
+    mutate(campaign_total = select(., campaign_1:campaign_16) %>% rowSums(na.rm = TRUE)) %>% 
+    filter(campaign_total > 0) %>% 
+    drop_na() %>%
+    select(-SubscriberID, count_na)
+```
+
+```{r}
+columns_to_keep_data_tbl %>% 
+    count(campaign_total)
+```
+
+```{r}
+prepared_data_tbl <- columns_to_keep_data_tbl %>% 
+    filter(campaign_total == 1) %>% 
+    select(-campaign_total)
+```
+
+
+```{r}
+prepared_data_tbl$campaign <- names(prepared_data_tbl[1:16])[max.col(prepared_data_tbl[1:16], "last")]
+
+prepared_data_tbl %>% view()
+```
+
+```{r}
+prepared_data_tbl <- prepared_data_tbl %>% 
+    select(campaign, everything(), -starts_with("campaign_"), -count_na)
+```
+
+```{r}
+prepared_data_tbl %>% skim()
+```
+
+```{r}
+prepared_data_tbl %>% 
+    write_csv("training_data.csv")
+```
+
+
+```{r}
+h2o.init()
+```
+
+```{r}
+training_data <- h2o.importFile("training_data.csv") 
+```
+
+```{r}
+y = "campaign"
+x = setdiff(names(prepared_data_tbl), y)
+```
+
+```{r}
+automl_h2o <- h2o.automl(
+    x = x,
+    y = y,
+    training_frame = training_data,
+    nfolds = 5,
+    max_runtime_secs =  180
+)
+```
+
+```{r}
+automl_h2o
+```
+
+```{r}
+automl_h2o %>% h2o.get_leaderboard()
+```
+
+```{r}
+automl_h2o@leader
+```
+
+```{r}
+automl_h2o@leader %>% 
+    h2o.saveModel("models/")
 ```
 
