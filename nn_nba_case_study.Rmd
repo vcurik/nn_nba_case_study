@@ -276,3 +276,7 @@ automl_h2o@leader %>%
     h2o.saveModel("models/")
 ```
 
+```{r}
+h2o.shutdown(prompt = FALSE)
+```
+
