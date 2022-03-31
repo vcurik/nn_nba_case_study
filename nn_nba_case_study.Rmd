@@ -1,0 +1,124 @@
+---
+title: "Telco Case Study - NBA"
+author: "Václav Čuřík"
+date: "3/31/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+options(scipen = 999)
+
+library(tidyverse)
+library(skimr)
+library(DataExplorer)
+```
+
+```{r}
+# Read sample data
+data_tbl <- read_csv("sample.csv")
+```
+
+The dataset consists of 60,213 rows with 203 columns.
+
+```{r}
+data_tbl %>% skim()
+```
+
+There are quite a few columns with many missing values which we will need to address.
+
+Column SubscriberID identifies the subscriber. But it is not unique, e.g. there is more than 1 row per subscriber.
+
+```{r}
+data_tbl %>% distinct(SubscriberID) # There are 50,331 unique customers in the dataset
+
+data_tbl %>%
+    mutate(SubscriberID = as.factor(SubscriberID)) %>% 
+    count(SubscriberID) %>% 
+    arrange(-n) %>% 
+    count(n) 
+```
+
+Base on the SnapshotDate column, there are 3 different snaphot dates. 
+
+```{r}
+deduplicated_data_tbl %>% 
+    count(SnapshotDate)
+```
+
+Looking at some subscribers with 2+ snapshots it seems there might be an issue with duplicated rows in the dataset. That is because there should not be more than 3 snapshots per subscriber and not all subscribers were present at all 3 snapshots.
+
+We will check for duplicate rows, but first we need to remove the unnamed column with row id's, because it makes each row unique. And then we can remove columns which contain exactly the same values in all columns.
+
+```{r}
+deduplicated_data_tbl <- data_tbl %>% 
+    select(-...1) %>% 
+    distinct()
+```
+
+Now we are left with 58,536 unique rows for 50,331 unique subscribers. So the assumption is, there should be maximum 3 snapshots per subscriber.
+
+```{r}
+deduplicated_data_tbl %>%
+    mutate(SubscriberID = as.factor(SubscriberID)) %>% 
+    count(SubscriberID) %>% 
+    arrange(-n) %>% 
+    count(n) 
+```
+
+And that is not the case, there are still 8 subscribers with 4 snapshots.
+
+```{r}
+deduplicated_data_tbl %>%
+    mutate(SubscriberID = as.factor(SubscriberID)) %>% 
+    count(SubscriberID) %>% 
+    filter(n == 4)
+    
+```
+
+```{r}
+deduplicated_data_tbl %>% 
+    filter(SubscriberID == 975234957439)
+
+deduplicated_data_tbl %>% 
+    filter(SubscriberID == 6340676177439)
+
+```
+
+Looking at some examples of subscribers with 4 rows brings us to the binary campaign reaction outcomes (column campaign_1 to 16).
+
+The only reason for given SubscriberID and SnaphostDate to occur more than once is a reaction to more than 1 campaign captured within the same snapshot.
+The original assumption about max 3 rows per subscriber was wrong because the campaign response seems to be captured as a new observation within the same snapsshot.
+
+For ML purposes we will not use either the SubscriberID or the SnapshotDate. Once these columns are removed we are safe to say that each row in our dataset contains a reaction to a specific campaign (if the value of one of the campaign reaction is 1 and there should be maximum of one reaction per row). Or if all campaign reaction columns are 0, then we know that no campaign attracted the subscriber.
+
+```{r}
+deduplicated_data_tbl %>%
+    select(SubscriberID, SnapshotDate, campaign_1:campaign_16) %>% 
+    mutate(campaign_total = select(., campaign_1:campaign_16) %>% rowSums(na.rm = TRUE)) %>% 
+    select(SubscriberID, SnapshotDate, campaign_total, campaign_1:campaign_16) %>% 
+    count(campaign_total)
+
+
+    
+    
+```
+
+```{r}
+data_tbl %>% 
+    select(SubscriberID, SnapshotDate, campaign_1:campaign_16) %>% 
+    mutate(campaign_total = select(., campaign_1:campaign_16) %>% rowSums(na.rm = TRUE)) %>% 
+    select(SubscriberID, SnapshotDate, campaign_total, campaign_1:campaign_16) %>% 
+    count(campaign_total)
+```
+
+
+```{r}
+deduplicated_data_tbl %>% 
+    filter(SubscriberID == 166496509439) %>% 
+    view()
+```
+

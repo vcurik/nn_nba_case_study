@@ -207,8 +207,10 @@ deduplication_data_tbl %>%
 
 # Auto Deduplication
 deduplicated_data_tbl <- data_tbl %>% 
-    select(-X1) %>% 
+    select(-...1) %>% 
     distinct()
+
+data_tbl %>% names()
 
 deduplicated_data_tbl %>% 
     count(SnapshotDate)
@@ -228,6 +230,11 @@ deduplicated_data_tbl %>%
 deduplicated_data_tbl %>% 
     count(CustomerTypeGroup) %>% 
     arrange(-n)
+
+deduplicated_data_tbl %>% 
+    filter(CustomerTypeGroup == "Business Customer") %>% 
+    select(campaign_1:campaign_16) %>% 
+
 
 deduplicated_data_tbl %>% 
     count(CustomerSegment) %>% 
