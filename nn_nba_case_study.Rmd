@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r message=TRUE, warning=TRUE}
 options(scipen = 999)
 
 library(tidyverse)
@@ -236,6 +236,7 @@ prepared_data_tbl %>%
 ```
 
 
+# Multinomial Classification
 ```{r}
 h2o.init()
 ```
@@ -275,6 +276,71 @@ automl_h2o@leader
 automl_h2o@leader %>% 
     h2o.saveModel("models/")
 ```
+
+```{r}
+h2o.shutdown(prompt = FALSE)
+```
+
+# [test - does not work] PCA 
+
+##  Training data - all 
+```{r}
+data_pca_tbl <- data_tbl %>% 
+    select(-c(starts_with("campaign"), ...1, SubscriberID, SnapshotDate))
+
+data_pca_tbl %>% 
+    write_csv("data_pca_all.csv")
+
+```
+
+
+```{r}
+h2o.init()
+```
+
+## Data for PCA
+```{r}
+pca_data_all <- h2o.importFile("data_pca_all.csv") 
+```
+## Train/Test split
+```{r}
+pca_data_split <- h2o.splitFrame(pca_data_all, ratios = 0.8, seed = 1234)
+train <- pca_data_split[[1]]
+test <- pca_data_split[[2]]
+```
+
+
+```{r}
+pca_h2o <-h2o.prcomp(
+    training_frame = train,
+    k = 50,
+    use_all_factor_levels = TRUE,
+    pca_method = "GLRM",
+    transform = "NONE",
+    impute_missing = FALSE
+    
+) 
+```
+
+
+```{r}
+pca_h2o
+```
+
+
+```{r}
+pca_h2o@model$importance
+```
+
+```{r}
+predictions_h2o <- h2o.predict(pca_h2o, newdata = test)
+```
+```{r}
+predictions_h2o %>% 
+    as_tibble()
+```
+
+
 
 ```{r}
 h2o.shutdown(prompt = FALSE)
